@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minecraft 1.21</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div id="game">
+        <h1>Minecraft Recreation Version 1.21</h1>
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="controls">
+            <select id="blockType">
+                <option value="grass">Grass</option>
+                <option value="dirt">Dirt</option>
+                <option value="stone">Stone</option>
+                <option value="wood">Wood</option>
+                <option value="water">Water</option>
+                <option value="sand">Sand</option>
+                <option value="food">Food</option>
+                <option value="craftingTable">Crafting Table</option>
+                <option value="chest">Chest</option>
+            </select>
+            <button id="saveWorld">Save World</button>
+            <button id="loadWorld">Load World</button>
+        </div>
+        <div id="inventory">
+            <h2>Inventory</h2>
+            <div id="inventoryItems"></div>
+        </div>
+        <div id="healthDisplay">
+            <h2>Health: <span id="health">100</span></h2>
+            <h2>Hunger: <span id="hunger">100</span></h2>
+            <h2>Experience: <span id="experience">0</span></h2>
+        </div>
+        <div id="crafting">
+            <h2>Crafting</h2>
+            <div id="craftingItems"></div>
+        </div>
+        <div id="mobs">
+            <h2>Mobs</h2>
+            <div id="mobsList"></div>
+        </div>
+        <div id="timeCycle">
+            <h2>Time of Day: <span id="timeDisplay">Day</span></h2>
+        </div>
+    </div>
+    <script src="script.js"></script>
+</body>
+</html>
