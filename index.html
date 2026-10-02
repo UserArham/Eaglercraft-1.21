@@ -4,48 +4,213 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Minecraft 1.21</title>
-    <link rel="stylesheet" href="styles.css">
+    <style>
+        body {
+            margin: 0;
+            background-color: #87CEEB; /* Sky blue */
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        h1 {
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            margin-bottom: 10px;
+        }
+
+        #ui-panel {
+            margin-bottom: 15px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 10px 20px;
+            border-radius: 8px;
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            color: white;
+        }
+
+        .hotbar-slot {
+            width: 50px;
+            height: 50px;
+            border: 3px solid #555;
+            background-color: #888;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            image-rendering: pixelated;
+            position: relative;
+        }
+
+        .hotbar-slot img {
+            width: 40px;
+            height: 40px;
+        }
+
+        .hotbar-slot.active {
+            border-color: #fff;
+            box-shadow: 0 0 10px #fff;
+        }
+        
+        .hotbar-slot::after {
+            content: attr(data-key);
+            position: absolute;
+            bottom: 2px;
+            right: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            color: #ddd;
+            text-shadow: 1px 1px 1px black;
+        }
+
+        canvas {
+            border: 4px solid #333;
+            background-color: #87CEEB;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            image-rendering: pixelated;
+        }
+
+        .controls-hint {
+            margin-top: 10px;
+            color: #fff;
+            background: rgba(0,0,0,0.4);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+    </style>
 </head>
 <body>
-    <div id="game">
-        <h1>Minecraft Recreation Version 1.21</h1>
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
-        <div id="controls">
-            <select id="blockType">
-                <option value="grass">Grass</option>
-                <option value="dirt">Dirt</option>
-                <option value="stone">Stone</option>
-                <option value="wood">Wood</option>
-                <option value="water">Water</option>
-                <option value="sand">Sand</option>
-                <option value="food">Food</option>
-                <option value="craftingTable">Crafting Table</option>
-                <option value="chest">Chest</option>
-            </select>
-            <button id="saveWorld">Save World</button>
-            <button id="loadWorld">Load World</button>
+
+    <h1>Minecraft 2D</h1>
+
+    <div id="ui-panel">
+        <div class="hotbar-slot active" data-block="grass" data-key="1">
+            <img src="assets/minecraft/textures/block/grass.png" alt="Grass">
         </div>
-        <div id="inventory">
-            <h2>Inventory</h2>
-            <div id="inventoryItems"></div>
+        <div class="hotbar-slot" data-block="stone" data-key="2">
+            <img src="assets/minecraft/textures/block/stone.png" alt="Stone">
         </div>
-        <div id="healthDisplay">
-            <h2>Health: <span id="health">100</span></h2>
-            <h2>Hunger: <span id="hunger">100</span></h2>
-            <h2>Experience: <span id="experience">0</span></h2>
+        <div class="hotbar-slot" data-block="wood" data-key="3">
+            <img src="assets/minecraft/textures/block/wood.png" alt="Wood">
         </div>
-        <div id="crafting">
-            <h2>Crafting</h2>
-            <div id="craftingItems"></div>
-        </div>
-        <div id="mobs">
-            <h2>Mobs</h2>
-            <div id="mobsList"></div>
-        </div>
-        <div id="timeCycle">
-            <h2>Time of Day: <span id="timeDisplay">Day</span></h2>
+        <div class="hotbar-slot" data-block="air" data-key="4">
+            <span style="font-size: 24px; color: #ff4d4d; font-weight: bold;">✕</span>
         </div>
     </div>
-    <script src="script.js"></script>
+
+    <canvas id="gameCanvas" width="640" height="400"></canvas>
+
+    <div class="controls-hint">
+        <strong>Left Click:</strong> Place/Break | <strong>1, 2, 3, 4:</strong> Change Hotbar Selection
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // Block & Grid Configuration
+        const BLOCK_SIZE = 16;
+        const COLS = canvas.width / BLOCK_SIZE;  // 40 columns
+        const ROWS = canvas.height / BLOCK_SIZE; // 25 rows
+
+        // Load Textures
+        const textures = {
+            grass: new Image(),
+            stone: new Image(),
+            wood: new Image()
+        };
+        textures.grass.src = 'grass.png';
+        textures.stone.src = 'stone.png'; // Handled your typo 'stine.png'
+        textures.wood.src = 'wood.png';
+
+        // Keep track of loaded assets to trigger initial render
+        let loadedImages = 0;
+        const totalImages = Object.keys(textures).length;
+        function onImageLoad() {
+            loadedImages++;
+            if (loadedImages === totalImages) {
+                drawGrid();
+            }
+        }
+        for (let key in textures) {
+            textures[key].onload = onImageLoad;
+        }
+
+        // Initialize world array (Empty / Air = null)
+        const world = Array(COLS).fill(null).map(() => Array(ROWS).fill(null));
+        let selectedBlock = 'grass';
+
+        // Generate flat world terrain
+        const horizon = Math.floor(ROWS * 0.6); // Surface height line
+        for (let x = 0; x < COLS; x++) {
+            for (let y = 0; y < ROWS; y++) {
+                if (y === horizon) {
+                    world[x][y] = 'grass';
+                } else if (y > horizon) {
+                    world[x][y] = 'stone';
+                }
+            }
+        }
+
+        // Draw Loop
+        function drawGrid() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            for (let x = 0; x < COLS; x++) {
+                for (let y = 0; y < ROWS; y++) {
+                    const blockType = world[x][y];
+                    if (blockType && textures[blockType]) {
+                        ctx.drawImage(textures[blockType], x * BLOCK_SIZE, y * BLOCK_SIZE, BLOCK_SIZE, BLOCK_SIZE);
+                    }
+                }
+            }
+        }
+
+        // Handle Canvas Interaction (Place / Break)
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            const gridX = Math.floor(mouseX / BLOCK_SIZE);
+            const gridY = Math.floor(mouseY / BLOCK_SIZE);
+
+            if (gridX >= 0 && gridX < COLS && gridY >= 0 && gridY < ROWS) {
+                if (selectedBlock === 'air') {
+                    world[gridX][gridY] = null; // Break block
+                } else {
+                    world[gridX][gridY] = selectedBlock; // Place block
+                }
+                drawGrid();
+            }
+        });
+
+        // Hotbar selection mechanics
+        const slots = document.querySelectorAll('.hotbar-slot');
+        function selectSlot(slotElement) {
+            slots.forEach(s => s.classList.remove('active'));
+            slotElement.classList.add('active');
+            selectedBlock = slotElement.getAttribute('data-block');
+        }
+
+        slots.forEach(slot => {
+            slot.addEventListener('click', () => selectSlot(slot));
+        });
+
+        // Keyboard hotkeys (1-4)
+        window.addEventListener('keydown', (e) => {
+            if (['1', '2', '3', '4'].includes(e.key)) {
+                const targetSlot = document.querySelector(`.hotbar-slot[data-key="${e.key}"]`);
+                if (targetSlot) selectSlot(targetSlot);
+            }
+        });
+    </script>
 </body>
 </html>
