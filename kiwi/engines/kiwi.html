@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Advanced Kiwi 2D Engine</title>
+    <style>
+        body { margin: 0; background: #111; color: #fff; overflow: hidden; font-family: sans-serif; }
+        canvas { display: block; background: #70a1ff; margin: 0 auto; }
+        #ui { position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.6); padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+
+<div id="ui">
+    <h3>Kiwi Engine 2D Voxel Demo</h3>
+    <p>A/D: Move | Space: Jump</p>
+    <p>Left Click: Break | Right Click: Place Stone</p>
+    <p id="stats">Active Chunk: 0</p>
+</div>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById("gameCanvas");
+const ctx = canvas.getContext("2d");
+
+canvas.width = 960;
+canvas.height = 540;
+
+// --- Engine Configuration ---
+const TILE_SIZE = 16;
+const CHUNK_SIZE = 16;
+const GRAVITY = 0.35;
+
+// Color Palette mapping indices matching backend
+const BLOCKS = {
+    0: null,            // Air
+    1: "#2ed573",       // Grass
+    2: "#8b5a2b",       // Dirt
+    3: "#747d8c",       // Stone
+    4: "#2f3542"        // Bedrock
+};
+
+// Engine Memory Pools
+let loadedChunks = {};
+let player = {
+    x: 100, y: 300,
+    vx: 0, vy: 0,
+    width: 14, height: 26,
+    grounded: false
+};
+
+let keys = {};
+let activeBlockType = 3; // Stone assigned to right click toggle default
+
+// --- Event Triggers ---
+window.addEventListener("keydown", e => keys[e.code] = true);
+window.addEventListener("keyup", e => keys[e.code] = false);
+canvas.addEventListener("mousedown", handleMouse);
+
+// --- Fetching API from Python Server Async ---
+async function fetchChunk(cx) {
+    if (loadedChunks[cx]) return;
+    loadedChunks[cx] = "loading"; 
+    try {
+        let response = await fetch(`http://localhost:5000/get_chunk?cx=${cx}`);
+        let json = await response.json();
+        loadedChunks[cx] = json.data;
+    } catch(err) {
+        console.error("Failed contacting engine backend: ", err);
+    }
+}
+
+async function sendBlockUpdate(bx, by, type) {
+    try {
+        await fetch(`http://localhost:5000/update_block`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ x: bx, y: by, type: type })
+        });
+    } catch(e) { console.error(e); }
+}
+
+function getBlock(bx, by) {
+    const cx = Math.floor(bx / CHUNK_SIZE);
+    const localX = ((bx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    if (!loadedChunks[cx] || loadedChunks[cx] === "loading") return 0;
+    if (by < 0 || by >= 64) return 0;
+    return loadedChunks[cx][localX][by];
+}
+
+function setBlockLocal(bx, by, type) {
+    const cx = Math.floor(bx / CHUNK_SIZE);
+    const localX = ((bx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
+    if (loadedChunks[cx] && loadedChunks[cx] !== "loading") {
+        loadedChunks[cx][localX][by] = type;
+        sendBlockUpdate(bx, by, type);
+    }
+}
+
+function handleMouse(e) {
+    const rect = canvas.getBoundingClientRect();
+    const mx = e.clientX - rect.left;
+    const my = e.clientY - rect.top;
+    
+    // Convert canvas screen pixels to structural grid coordinates
+    const worldX = Math.floor((mx - (canvas.width/2 - player.x)) / TILE_SIZE);
+    const worldY = Math.floor((canvas.height - my) / TILE_SIZE); // inverted Y axis matching python
+    
+    if(e.button === 0) { // Left click breaks
+        setBlockLocal(worldX, worldY, 0);
+    } else if(e.button === 2) { // Right click places
+        setBlockLocal(worldX, worldY, activeBlockType);
+    }
+}
+// Block context override to make right click building natural
+window.addEventListener('contextmenu', e => e.preventDefault());
+
+// --- Engine Core Pipeline Loop ---
+function update() {
+    // 1. Movement Calculations
+    if (keys["KeyA"]) player.vx = -3;
+    else if (keys["KeyD"]) player.vx = 3;
+    else player.vx *= 0.8; // Inertia damping friction
+
+    if (keys["Space"] && player.grounded) {
+        player.vy = -7.5;
+        player.grounded = false;
+    }
+
+    player.vy += GRAVITY;
+
+    // 2. High Precision Dynamic Collision Checks
+    player.x += player.vx;
+    resolveCollisions('x');
+    player.y += player.vy;
+    resolveCollisions('y');
+
+    // 3. Procedural Streaming Check
+    const currentChunk = Math.floor((player.x / TILE_SIZE) / CHUNK_SIZE);
+    document.getElementById("stats").innerText = `Active Chunk Grid: ${currentChunk}`;
+    
+    // Load radius optimization
+    for(let i = -2; i <= 2; i++) {
+        fetchChunk(currentChunk + i);
+    }
+
+    render();
+    requestAnimationFrame(update);
+}
+
+function resolveCollisions(dir) {
+    let pGridLeft = Math.floor(player.x / TILE_SIZE);
+    let pGridRight = Math.floor((player.x + player.width) / TILE_SIZE);
+    let pGridBottom = Math.floor((player.y) / TILE_SIZE);
+    let pGridTop = Math.floor((player.y + player.height) / TILE_SIZE);
+
+    for (let bx = pGridLeft; bx <= pGridRight; bx++) {
+        for (let by = pGridBottom; by <= pGridTop; by++) {
+            if (getBlock(bx, by) !== 0) { // Solid obstacle Hit
+                if (dir === 'x') {
+                    if (player.vx > 0) player.x = bx * TILE_SIZE - player.width - 0.1;
+                    if (player.vx < 0) player.x = (bx + 1) * TILE_SIZE + 0.1;
+                    player.vx = 0;
+                } else if (dir === 'y') {
+                    if (player.vy > 0) {
+                        player.y = (by + 1) * TILE_SIZE + 0.1;
+                        player.grounded = true;
+                    }
+                    if (player.vy < 0) player.y = by * TILE_SIZE - player.height - 0.1;
+                    player.vy = 0;
+                }
+            }
+        }
+    }
+}
+
+function render() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Camera translations centered on moving actor
+    ctx.save();
+    ctx.translate(canvas.width / 2 - player.x, 0);
+
+    const startChunk = Math.floor(((player.x - canvas.width) / TILE_SIZE) / CHUNK_SIZE);
+    const endChunk = Math.floor(((player.x + canvas.width) / TILE_SIZE) / CHUNK_SIZE);
+
+    for (let cx = startChunk; cx <= endChunk; cx++) {
+        if (loadedChunks[cx] && loadedChunks[cx] !== "loading") {
+            for (let lx = 0; lx < CHUNK_SIZE; lx++) {
+                const bx = cx * CHUNK_SIZE + lx;
+                for (let by = 0; by < 64; by++) {
+                    const blockId = loadedChunks[cx][lx][by];
+                    if (blockId !== 0 && BLOCKS[blockId]) {
+                        ctx.fillStyle = BLOCKS[blockId];
+                        // Convert back to standard top-down Canvas coordinates
+                        ctx.fillRect(bx * TILE_SIZE, canvas.height - (by * TILE_SIZE) - TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    }
+                }
+            }
+        }
+    }
+
+    // Render local player asset
+    ctx.fillStyle = "#ff4757";
+    ctx.fillRect(player.x, canvas.height - player.y - player.height, player.width, player.height);
+    ctx.restore();
+}
+
+// Start Engine Hook
+update();
+</script>
+</body>
+</html>
