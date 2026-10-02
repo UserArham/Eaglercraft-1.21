@@ -1,0 +1,103 @@
+/* opening screen */
+.entrence-screen {
+  margin-top: 0;
+}
+
+.instruction-window {
+  position: absolute;
+  top: 10%;
+}
+
+.instruction-window p {
+  padding: 0;
+}
+
+.instruction-window div > img {
+  width: 20px;
+}
+
+.modify-window {
+  position: absolute;
+  top: 10%;
+  left: 10%;
+}
+.modify-window > * {
+  margin-bottom: 5px;
+}
+
+/* screen */
+.container {
+  grid-template-columns: 6fr 1fr;
+  width: 100%;
+}
+
+/* game */
+.game-grid {
+  margin: 0 10px;
+}
+
+/* right side -- tools and material */
+.tool-box--right-side {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+}
+
+.picaxe,
+.shovel,
+.axe {
+  padding: 0;
+  width: 25px;
+  margin: 5px;
+  margin-left: 2px;
+  font-size: 8px;
+}
+
+.picaxe > img,
+.shovel > img,
+.axe > img {
+  width: 1rem;
+}
+
+.tool-box--right-side button {
+  width: 60px;
+  height: 10vh;
+  padding: 2px;
+  font-size: 10px;
+  margin: 5px;
+}
+
+.inventory {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  column-gap: 5px;
+  margin-top: 5%;
+}
+
+.item {
+  width: 20px;
+  height: 40px;
+}
+
+/* force player to move to landscape */
+@media only screen and (orientation: portrait) {
+  .entrence-screen {
+    /* background: black; */
+    text-align: center;
+    overflow: hidden;
+  }
+
+  .entrence-screen::before {
+    content: "Please rotate your phone to landscape to better manipulate the game";
+    position: absolute;
+    color: #fff;
+    font-weight: 900;
+    top: 49%;
+  }
+
+  .entrence-screen button {
+    height: 10vh;
+  }
+}
